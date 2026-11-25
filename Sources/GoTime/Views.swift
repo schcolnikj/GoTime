@@ -9,19 +9,52 @@ struct PanelView: View {
     @ObservedObject var model: AppModel
     let center: AlertCenter
     let openSettings: () -> Void
+    var onResize: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if model.access == .denied {
                 accessCard
             } else {
-                if let m = model.upNext { upNextCard(m) }
-                todayList
+                dayBar
+                if model.dayOffset == 0, let m = model.upNext { upNextCard(m) }
+                dayList
             }
             footer
         }
         .padding(8)
         .frame(width: 336)
+        // The panel window doesn't follow SwiftUI's size by itself; refit after the layout settles.
+        .onChange(of: model.dayOffset) { DispatchQueue.main.async(execute: onResize) }
+        .onChange(of: model.listMeetings.count) { DispatchQueue.main.async(execute: onResize) }
+        .onChange(of: model.upNext?.id) { DispatchQueue.main.async(execute: onResize) }
+    }
+
+    private var dayBar: some View {
+        HStack(spacing: 8) {
+            Button { model.dayOffset -= 1 } label: { Image(systemName: "chevron.left").frame(width: 14) }
+                .buttonStyle(GlassButtonStyle())
+                .keyboardShortcut(.leftArrow, modifiers: [])
+                .accessibilityLabel("Previous day")
+            Spacer()
+            Button { model.dayOffset = 0 } label: {
+                VStack(spacing: 1) {
+                    Text(model.dayTitle).font(.system(size: 13, weight: .semibold))
+                    Text(Fmt.day(model.viewedDay)).font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(model.dayOffset == 0 ? "Today" : "Back to today")
+            .accessibilityLabel(model.dayOffset == 0 ? "Today, \(Fmt.day(model.viewedDay))" : "\(model.dayTitle), \(Fmt.day(model.viewedDay)). Back to today")
+            Spacer()
+            Button { model.dayOffset += 1 } label: { Image(systemName: "chevron.right").frame(width: 14) }
+                .buttonStyle(GlassButtonStyle())
+                .keyboardShortcut(.rightArrow, modifiers: [])
+                .accessibilityLabel("Next day")
+        }
+        .padding(.horizontal, 2)
+        .padding(.bottom, 8)
     }
 
     private var accessCard: some View {
@@ -73,22 +106,47 @@ struct PanelView: View {
         .glassBackground(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    private var todayList: some View {
+    private var dayList: some View {
         VStack(alignment: .leading, spacing: 1) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Today").font(.system(size: 13, weight: .semibold))
+                Text("Meetings").font(.system(size: 13, weight: .semibold))
                 Spacer()
-                Text("\(Fmt.day(model.now)) · \(model.leftToday) left").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text(listCount).font(.system(size: 12)).foregroundStyle(.secondary)
             }
             .padding(.horizontal, 8).padding(.top, 10).padding(.bottom, 4)
 
-            if model.today.isEmpty {
-                Text(model.access == .granted ? "No meetings today" : "Loading your calendar…")
-                    .font(.system(size: 13)).foregroundStyle(.secondary).padding(8)
+            if model.listMeetings.isEmpty {
+                Text(emptyText).font(.system(size: 13)).foregroundStyle(.secondary).padding(8)
             }
-            ForEach(model.today) { row($0) }
+            ForEach(model.listMeetings) { row($0) }
         }
         .padding(.bottom, 4)
+    }
+
+    private var listCount: String {
+        if model.dayOffset == 0 { return "\(model.leftToday) left" }
+        let n = model.listMeetings.count
+        return n == 1 ? "1 meeting" : "\(n) meetings"
+    }
+
+    private var emptyText: String {
+        guard model.access == .granted else { return "Loading your calendar…" }
+        switch model.dayOffset {
+        case 0: return "No meetings today"
+        case 1: return "No meetings tomorrow"
+        default: return "No meetings on \(Fmt.day(model.viewedDay))"
+        }
+    }
+
+    /// Filled dot: you accepted (or it's yours). Hollow ring: only invited, or "maybe". The subtitle says which.
+    @ViewBuilder
+    private func responseDot(_ m: Meeting) -> some View {
+        let color = Color(nsColor: m.color)
+        if m.response == .accepted {
+            Circle().fill(color).frame(width: 7, height: 7)
+        } else {
+            Circle().strokeBorder(color, lineWidth: 1.5).frame(width: 8, height: 8)
+        }
     }
 
     private func row(_ m: Meeting) -> some View {
@@ -99,9 +157,10 @@ struct PanelView: View {
             Text(Fmt.time(m.start)).font(.system(size: 12)).monospacedDigit()
                 .foregroundStyle(past ? .tertiary : .secondary)
                 .frame(width: 40, alignment: .leading)
-            Circle().fill(Color(nsColor: m.color)).frame(width: 7, height: 7)
+            responseDot(m)
             VStack(alignment: .leading, spacing: 0) {
                 Text(m.title).font(.system(size: 13, weight: isNext ? .semibold : .medium))
+                    .strikethrough(m.response == .declined)
                     .foregroundStyle(past ? .tertiary : .primary).lineLimit(1)
                 Text(m.rowSub).font(.system(size: 12)).foregroundStyle(.tertiary).lineLimit(1)
             }

@@ -106,11 +106,11 @@ final class PanelController {
     func show<V: View>(_ content: V, below item: NSRect, focus: Bool) {
         close()
         let host = NSHostingView(rootView: content.windowGlass(22).padding(14).environment(\.colorScheme, .dark))
+        host.sizingOptions = []  // fitToContent() sizes the panel, keeping its top edge under the menu bar
         let size = host.fittingSize
         let screen = NSScreen.screens.first { $0.frame.intersects(item) } ?? NSScreen.main ?? NSScreen.screens[0]
         let vf = screen.visibleFrame
         let x = min(max(item.midX - size.width / 2, vf.minX), vf.maxX - size.width)
-        // shortcut: sized when opened; if today's list grows while it's open, it resizes on the next open.
         let p = FloatingPanel(rect: NSRect(x: x, y: item.minY - size.height + 10, width: size.width, height: size.height),
                               level: .popUpMenu, activating: false)
         p.contentView = host
@@ -133,6 +133,14 @@ final class PanelController {
     }
 
     func focus() { panel?.makeKeyAndOrderFront(nil) }
+
+    /// Grow or shrink to the content (e.g. after switching days), keeping the top edge where it is.
+    func fitToContent() {
+        guard let p = panel, let host = p.contentView else { return }
+        let size = host.fittingSize
+        guard size != p.frame.size else { return }
+        p.setFrame(NSRect(x: p.frame.minX, y: p.frame.maxY - size.height, width: size.width, height: size.height), display: true)
+    }
 
     func close() {
         monitors.forEach { NSEvent.removeMonitor($0) }

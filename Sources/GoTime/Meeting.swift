@@ -13,11 +13,37 @@ struct Meeting: Identifiable, Equatable {
     /// Opens the event in Calendar; Join falls back to it when no video link was found.
     let calendarURL: URL?
 
+    let response: Response
+
+    /// Your answer to the invite.
+    enum Response {
+        case accepted, tentative, pending, declined
+
+        init(_ status: EKParticipantStatus?) {
+            switch status {
+            case .none: self = .accepted  // your own event: you're not on its attendee list
+            case .some(.pending): self = .pending
+            case .some(.tentative): self = .tentative
+            case .some(.declined): self = .declined
+            default: self = .accepted
+            }
+        }
+
+        var label: String? {
+            switch self {
+            case .accepted: return nil
+            case .pending: return "Invited"
+            case .tentative: return "Maybe"
+            case .declined: return "Declined"
+            }
+        }
+    }
+
     init(id: String, title: String, start: Date, end: Date, link: URL? = nil, service: String? = nil, attendees: Int = 0,
-         color: NSColor = .systemBlue, calendarURL: URL? = nil) {
+         color: NSColor = .systemBlue, calendarURL: URL? = nil, response: Response = .accepted) {
         self.id = id; self.title = title; self.start = start; self.end = end
         self.link = link; self.service = service; self.attendees = attendees; self.color = color
-        self.calendarURL = calendarURL
+        self.calendarURL = calendarURL; self.response = response
     }
 
     init(event: EKEvent) {
@@ -34,15 +60,20 @@ struct Meeting: Identifiable, Equatable {
             color: event.calendar?.color ?? .systemBlue,
             calendarURL: event.eventIdentifier
                 .flatMap { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) }
-                .flatMap { URL(string: "ical://ekevent/\($0)?method=show&options=more") }
+                .flatMap { URL(string: "ical://ekevent/\($0)?method=show&options=more") },
+            response: event.organizer?.isCurrentUser == true
+                ? .accepted
+                : Response(event.attendees?.first(where: \.isCurrentUser)?.participantStatus)
         )
     }
 
     var timeRange: String { "\(Fmt.time(start)) – \(Fmt.time(end))" }
     var meta: String {
-        [service ?? "No video link", attendees > 1 ? "\(attendees) people" : nil].compactMap { $0 }.joined(separator: " · ")
+        [response.label, service ?? "No video link", attendees > 1 ? "\(attendees) people" : nil].compactMap { $0 }.joined(separator: " · ")
     }
-    var rowSub: String { "\(Fmt.duration(end.timeIntervalSince(start))) · \(service ?? "No video link")" }
+    var rowSub: String {
+        [response.label, Fmt.duration(end.timeIntervalSince(start)), service ?? "No video link"].compactMap { $0 }.joined(separator: " · ")
+    }
 }
 
 enum MeetingLink {
@@ -116,11 +147,15 @@ enum Fmt {
     }
     static func time(_ d: Date) -> String { timeFormatter.string(from: d) }
     static func day(_ d: Date) -> String { dayFormatter.string(from: d) }
+    static func weekday(_ d: Date) -> String { weekdayFormatter.string(from: d) }
 
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter(); f.setLocalizedDateFormatFromTemplate("jj:mm"); return f
     }()
     private static let dayFormatter: DateFormatter = {
         let f = DateFormatter(); f.setLocalizedDateFormatFromTemplate("EEE d MMM"); return f
+    }()
+    private static let weekdayFormatter: DateFormatter = {
+        let f = DateFormatter(); f.setLocalizedDateFormatFromTemplate("EEEE"); return f
     }()
 }

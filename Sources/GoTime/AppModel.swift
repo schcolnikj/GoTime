@@ -51,26 +51,60 @@ final class AppModel: ObservableObject {
     }
 
     func reload() {
-        guard access == .granted else { meetings = []; return }
+        guard access == .granted else { meetings = []; viewedDayMeetings = []; return }
         let cal = Calendar.current
         let dayStart = cal.startOfDay(for: now)
         let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart)!
         // Fetch past midnight too, so a meeting at 00:05 still gets its 23:55 alert.
-        let fetchEnd = max(dayEnd, now.addingTimeInterval(12 * 3600))
+        meetings = fetch(from: dayStart, to: max(dayEnd, now.addingTimeInterval(12 * 3600)))
+        loadViewedDay()
+
+        let kept = muted.filter { Self.keepMute($0, since: dayStart) }  // forget mutes for days already gone
+        if kept != muted { muted = kept; Pref.muted = kept }
+    }
+
+    private func fetch(from start: Date, to end: Date) -> [Meeting] {
         let skipDeclined = Pref.d.bool(forKey: "skipDeclined")
         let onlyVideo = Pref.d.bool(forKey: "onlyVideo")
-
-        meetings = store.events(matching: store.predicateForEvents(withStart: dayStart, end: fetchEnd, calendars: nil))
+        return store.events(matching: store.predicateForEvents(withStart: start, end: end, calendars: nil))
             .filter { !$0.isAllDay && $0.status != .canceled }
             .filter { !(skipDeclined && $0.attendees?.first(where: \.isCurrentUser)?.participantStatus == .declined) }
             .map(Meeting.init(event:))
             .filter { !onlyVideo || $0.link != nil }
             .sorted { $0.start < $1.start }
+    }
 
-        if !meetings.isEmpty {
-            muted.formIntersection(meetings.map(\.id))  // forget mutes for meetings that are gone
-            Pref.muted = muted
+    /// Meeting ids end in "@<start time>"; a mute is kept until that meeting's day has passed.
+    nonisolated static func keepMute(_ id: String, since dayStart: Date) -> Bool {
+        guard let start = id.split(separator: "@").last.flatMap({ Double($0) }) else { return false }
+        return start >= dayStart.timeIntervalSince1970
+    }
+
+    // MARK: Day shown in the panel
+
+    /// Days from today; the panel's arrows change it and it resets to today when the panel opens.
+    @Published var dayOffset = 0 { didSet { if dayOffset != oldValue { loadViewedDay() } } }
+    @Published private(set) var viewedDayMeetings: [Meeting] = []
+
+    var viewedDay: Date {
+        Calendar.current.date(byAdding: .day, value: dayOffset, to: Calendar.current.startOfDay(for: now))!
+    }
+    var listMeetings: [Meeting] { dayOffset == 0 ? today : viewedDayMeetings }
+
+    var dayTitle: String {
+        switch dayOffset {
+        case 0: return "Today"
+        case 1: return "Tomorrow"
+        case -1: return "Yesterday"
+        default: return Fmt.weekday(viewedDay)
         }
+    }
+
+    private func loadViewedDay() {
+        guard dayOffset != 0, access == .granted else { viewedDayMeetings = []; return }
+        let start = viewedDay
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
+        viewedDayMeetings = fetch(from: start, to: end).filter { $0.start >= start && $0.start < end }
     }
 
     func toggleMute(_ m: Meeting) {

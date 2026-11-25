@@ -135,8 +135,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem.button, let window = button.window else { return }
         if panel.isShown { if focus { panel.focus() }; return }
         model.refreshAccess()
+        model.dayOffset = 0  // always open on today
         let itemRect = window.convertToScreen(button.convert(button.bounds, to: nil))
-        panel.show(PanelView(model: model, center: center, openSettings: { [weak self] in self?.openSettings() }), below: itemRect, focus: focus)
+        let content = PanelView(model: model, center: center,
+                                openSettings: { [weak self] in self?.openSettings() },
+                                onResize: { [weak self] in self?.panel.fitToContent() })
+        panel.show(content, below: itemRect, focus: focus)
     }
 
     private func openSettings() {
@@ -206,6 +210,16 @@ enum SelfTest {
         check(Fmt.mss(-12) == "0:12", "0:12 after start")
         check(Fmt.short("Quarterly roadmap planning session") == "Quarterly roadmap plann…", "truncates at 24")
         check(Fmt.urgency(601) == .calm && Fmt.urgency(600) == .soon && Fmt.urgency(120) == .imminent && Fmt.urgency(0) == .now, "urgency thresholds")
+
+        let midnight = Date(timeIntervalSince1970: 1_000_000)
+        check(AppModel.keepMute("abc@group.calendar.google.com@1000500", since: midnight), "mute kept for a meeting later today (id containing @)")
+        check(!AppModel.keepMute("abc@999000", since: midnight), "mute dropped once its day has passed")
+        check(!AppModel.keepMute("no-start-time", since: midnight), "mute without a start time is dropped")
+        check(Meeting.Response(nil) == .accepted && Meeting.Response(.accepted) == .accepted
+              && Meeting.Response(.pending) == .pending && Meeting.Response(.tentative) == .tentative
+              && Meeting.Response(.declined) == .declined, "invite response mapping")
+        check(Meeting(id: "x", title: "t", start: midnight, end: midnight.addingTimeInterval(1800), response: .pending).rowSub
+              == "Invited · 30 min · No video link", "invited label in the row")
 
         print(failures == 0 ? "selftest: all passed" : "selftest: \(failures) failed")
         if failures > 0 { exit(1) }
