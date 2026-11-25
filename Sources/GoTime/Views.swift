@@ -329,6 +329,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480)
+        .frame(width: 480, height: 580)  // a grouped Form scrolls, so it has no natural height: the window collapsed without this
     }
 }

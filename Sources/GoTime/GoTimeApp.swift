@@ -18,13 +18,14 @@ enum GoTimeMain {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     lazy var center = AlertCenter(model: model)
-    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    private var statusItem: NSStatusItem!
     private let popover = NSPopover()
     private var settingsWindow: NSWindow?
     private var timer: Timer?
     private var ticks = 0
     private var lastRender = ""
     private var shownAt = Date.distantPast
+    private var hoverOpen: DispatchWorkItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Pref.registerDefaults()
@@ -35,10 +36,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.contentViewController = host
         popover.behavior = .transient
 
+        // New items land in the menu bar's hidden overflow (behind «). Start at the right end, in the
+        // always-visible part; once the user ⌘-drags it, macOS saves that spot under the same key.
+        let positionKey = "NSStatusItem Preferred Position GoTime"
+        if Pref.d.object(forKey: positionKey) == nil { Pref.d.set(0, forKey: positionKey) }
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem.autosaveName = "GoTime"
+
         if let button = statusItem.button {
             button.target = self
             button.action = #selector(statusItemClicked)
-            button.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil))
+            button.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect], owner: self, userInfo: nil))
         }
 
         NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: model.store, queue: .main) { [weak self] _ in
@@ -77,15 +85,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let colors: (bg: Color, fg: Color)
         switch state.urgency {
-        case .calm:
-            button.image = NSImage(systemSymbolName: state.symbol, accessibilityDescription: nil)
-            button.imagePosition = .imageLeading
-            button.title = " " + state.text
-            return
+        case .calm, .action: colors = (.brand, .onBrand)
         case .soon: colors = (.soon, .onSoon)
         case .imminent: colors = (.alarm, .white)
         case .now: colors = (flashOn ? .alarm : .alarmDim, .white)
-        case .action: colors = (.brand, .onBrand)
         }
         let renderer = ImageRenderer(content: PillView(state: state, bg: colors.bg, fg: colors.fg))
         renderer.scale = button.window?.backingScaleFactor ?? 2
@@ -97,6 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func statusItemClicked() {
+        hoverOpen?.cancel(); hoverOpen = nil
         // A hover may have just opened it; don't let the click that follows close it again.
         if popover.isShown && Date().timeIntervalSince(shownAt) > 0.6 {
             popover.performClose(nil)
@@ -105,8 +109,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc(mouseEntered:) func mouseEntered(_ event: NSEvent) { showPanel(activate: false) }
-    @objc(mouseExited:) func mouseExited(_ event: NSEvent) {}
+    // Hover opens the panel only after a real mouse move over the item plus a short rest. A bare
+    // mouseEntered also fires when the menu bar overflow (« ») slides items under a still pointer.
+    @objc(mouseEntered:) func mouseEntered(_ event: NSEvent) {}
+
+    @objc(mouseMoved:) func mouseMoved(_ event: NSEvent) {
+        guard hoverOpen == nil, !popover.isShown else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.hoverOpen = nil
+            if self.isPointerOnItem { self.showPanel(activate: false) }
+        }
+        hoverOpen = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+    }
+
+    @objc(mouseExited:) func mouseExited(_ event: NSEvent) {
+        hoverOpen?.cancel(); hoverOpen = nil
+    }
+
+    private var isPointerOnItem: Bool {
+        guard let button = statusItem.button, let window = button.window else { return false }
+        return window.convertToScreen(button.convert(button.bounds, to: nil)).contains(NSEvent.mouseLocation)
+    }
 
     private func showPanel(activate: Bool) {
         if activate { NSApp.activate() }  // needed for ⌘J / ⌘N / ⌘Q; hover doesn't steal focus
