@@ -10,6 +10,7 @@
   <img src="https://img.shields.io/badge/macOS-14%2B-ef7200" alt="macOS 14 or later">
   <img src="https://img.shields.io/badge/Swift-SwiftUI-ef7200" alt="Swift and SwiftUI">
   <img src="https://img.shields.io/badge/Liquid%20Glass-macOS%2026-ef7200" alt="Liquid Glass on macOS 26">
+  <img src="https://img.shields.io/badge/license-MIT-ef7200" alt="MIT license">
 </p>
 
 ## What it does
@@ -43,3 +44,7 @@ open build/GoTime.app
 
 - On first launch GoTime asks for Calendar access. It reads the calendars in the macOS Calendar app, so to see a Google calendar, add the account in System Settings › Internet Accounts.
 - Nothing leaves your Mac. GoTime makes no network requests and has no analytics; your settings stay in the app's local preferences.
+
+## License
+
+[MIT](LICENSE)
