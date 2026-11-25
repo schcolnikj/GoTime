@@ -83,25 +83,41 @@ struct GlassButtonStyle: ButtonStyle {
     }
 }
 
-/// The GoTime mark: a clock whose ring opens at the top right like a G; the hand pointing at 3 is the G's bar.
-/// Drawn in the current foreground style.
+/// The GoTime mark, "Alarm G": an alarm clock whose ring opens at the top right like a G (the hand at 3 is
+/// the G's bar), with bells on top and legs. Drawn in the current foreground style.
 struct LogoMark: View {
-    var weight: CGFloat = 0.14  // stroke width as a fraction of the mark's size
+    var weight: CGFloat = 9  // ring stroke, in the 100×100 design box
 
     var body: some View {
         GeometryReader { g in
             let s = min(g.size.width, g.size.height)
-            let w = s * weight
-            let r = (s - w) / 2
-            let c = CGPoint(x: g.size.width / 2, y: g.size.height / 2)
-            Path { p in
-                // From 3 o'clock round through 6, 9 and 12 to 1:30 (y points down, so clockwise: false is clockwise on screen).
-                p.addArc(center: c, radius: r, startAngle: .degrees(0), endAngle: .degrees(315), clockwise: false)
-                p.move(to: c)
-                p.addLine(to: CGPoint(x: c.x + r, y: c.y))
+            let t = CGAffineTransform(translationX: (g.size.width - s) / 2, y: (g.size.height - s) / 2).scaledBy(x: s / 100, y: s / 100)
+            ZStack {
+                Self.bells.applying(t).fill()
+                Self.clock.applying(t).stroke(style: StrokeStyle(lineWidth: weight * s / 100, lineCap: .round))
+                Self.legs.applying(t).stroke(style: StrokeStyle(lineWidth: (weight - 2) * s / 100, lineCap: .round))
             }
-            .stroke(style: StrokeStyle(lineWidth: w, lineCap: .round, lineJoin: .round))
         }
+    }
+
+    // Same geometry as the SVG on the design canvas (100×100, y down).
+    static let clock = Path { p in
+        // From 3 o'clock round through 6, 9 and 12 to 1:30 (y points down, so clockwise: false is clockwise on screen).
+        p.addArc(center: CGPoint(x: 50, y: 50), radius: 26, startAngle: .degrees(0), endAngle: .degrees(315), clockwise: false)
+        p.move(to: CGPoint(x: 50, y: 50))
+        p.addLine(to: CGPoint(x: 76, y: 50))
+    }
+    static let bells = Path { p in
+        p.move(to: CGPoint(x: 18, y: 26))
+        p.addArc(center: CGPoint(x: 33.98, y: 26.82), radius: 16, startAngle: .degrees(182.94), endAngle: .degrees(292.1), clockwise: false)
+        p.closeSubpath()
+        p.move(to: CGPoint(x: 60, y: 12))
+        p.addArc(center: CGPoint(x: 66.02, y: 26.82), radius: 16, startAngle: .degrees(247.9), endAngle: .degrees(357.06), clockwise: false)
+        p.closeSubpath()
+    }
+    static let legs = Path { p in
+        p.move(to: CGPoint(x: 32, y: 78)); p.addLine(to: CGPoint(x: 26, y: 85))
+        p.move(to: CGPoint(x: 68, y: 78)); p.addLine(to: CGPoint(x: 74, y: 85))
     }
 }
 
@@ -118,9 +134,9 @@ struct AppIconView: View {
                     .overlay(shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.5), .white.opacity(0.05)], startPoint: .top, endPoint: .bottom), lineWidth: max(0.5, side * 0.004)))
                     .frame(width: tile, height: tile)
                     .shadow(color: .black.opacity(0.3), radius: side * 0.02, y: side * 0.012)
-                LogoMark(weight: side < 64 ? 0.18 : 0.14)  // thicker when tiny so the G survives
+                LogoMark(weight: side < 64 ? 12 : 9)  // thicker when tiny so the G survives
                     .foregroundStyle(.white)
-                    .frame(width: tile * 0.62, height: tile * 0.62)
+                    .frame(width: tile * 0.76, height: tile * 0.76)
                     .shadow(color: Color(hex: 0x7A3000).opacity(0.35), radius: side * 0.012, y: side * 0.006)
             }
             .frame(width: g.size.width, height: g.size.height)
@@ -136,7 +152,7 @@ struct PillView: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            if state.warning { Image(systemName: "exclamationmark.circle") } else { LogoMark(weight: 0.16).frame(width: 13, height: 13) }
+            if state.warning { Image(systemName: "exclamationmark.circle") } else { LogoMark(weight: 11).frame(width: 15, height: 15) }
             Text(state.text)
         }
         .font(.system(size: 13, weight: .semibold))
