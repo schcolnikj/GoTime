@@ -6,6 +6,9 @@ import SwiftUI
 enum GoTimeMain {
     @MainActor static func main() {
         if CommandLine.arguments.contains("--selftest") { SelfTest.run(); return }
+        if let i = CommandLine.arguments.firstIndex(of: "--export-iconset"), i + 1 < CommandLine.arguments.count {
+            exportIconset(to: CommandLine.arguments[i + 1]); return
+        }
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate
@@ -78,7 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem.button else { return }
         let state = model.bar
         let flashOn = Int(model.now.timeIntervalSince1970) % 2 == 0 || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        let key = "\(state.text)|\(state.urgency)|\(state.symbol)|\(flashOn)"
+        let key = "\(state.text)|\(state.urgency)|\(state.warning)|\(flashOn)"
         guard key != lastRender else { return }
         lastRender = key
         button.setAccessibilityLabel(state.text)
@@ -153,6 +156,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow?.center()
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate()
+    }
+}
+
+/// `GoTime --export-iconset <dir>`: writes the PNGs iconutil needs to build AppIcon.icns. Runs in build.sh.
+@MainActor
+func exportIconset(to dir: String) {
+    for pt in [16, 32, 128, 256, 512] {
+        for scale in [1, 2] {
+            let px = CGFloat(pt * scale)
+            let renderer = ImageRenderer(content: AppIconView().frame(width: px, height: px))
+            let name = "icon_\(pt)x\(pt)" + (scale == 2 ? "@2x" : "") + ".png"
+            guard let cg = renderer.cgImage,
+                  let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) else {
+                print("icon export failed: \(name)"); exit(1)
+            }
+            do { try png.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name)) }
+            catch { print("icon export failed: \(name): \(error)"); exit(1) }
+        }
     }
 }
 

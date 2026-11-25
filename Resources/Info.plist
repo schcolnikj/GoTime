@@ -8,6 +8,8 @@
 	<string>local.gotime</string>
 	<key>CFBundleName</key>
 	<string>GoTime</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleDisplayName</key>
 	<string>GoTime</string>
 	<key>CFBundlePackageType</key>

@@ -83,6 +83,51 @@ struct GlassButtonStyle: ButtonStyle {
     }
 }
 
+/// The GoTime mark: a clock whose ring opens at the top right like a G; the hand pointing at 3 is the G's bar.
+/// Drawn in the current foreground style.
+struct LogoMark: View {
+    var weight: CGFloat = 0.14  // stroke width as a fraction of the mark's size
+
+    var body: some View {
+        GeometryReader { g in
+            let s = min(g.size.width, g.size.height)
+            let w = s * weight
+            let r = (s - w) / 2
+            let c = CGPoint(x: g.size.width / 2, y: g.size.height / 2)
+            Path { p in
+                // From 3 o'clock round through 6, 9 and 12 to 1:30 (y points down, so clockwise: false is clockwise on screen).
+                p.addArc(center: c, radius: r, startAngle: .degrees(0), endAngle: .degrees(315), clockwise: false)
+                p.move(to: c)
+                p.addLine(to: CGPoint(x: c.x + r, y: c.y))
+            }
+            .stroke(style: StrokeStyle(lineWidth: w, lineCap: .round, lineJoin: .round))
+        }
+    }
+}
+
+/// App icon artwork on the macOS grid (824-pt tile on a 1024 canvas). build.sh exports it to AppIcon.icns.
+struct AppIconView: View {
+    var body: some View {
+        GeometryReader { g in
+            let side = min(g.size.width, g.size.height)
+            let tile = side * 0.805
+            let shape = RoundedRectangle(cornerRadius: tile * 0.2237, style: .continuous)
+            ZStack {
+                shape
+                    .fill(LinearGradient(colors: [Color(hex: 0xFF8A24), Color(hex: 0xE56500)], startPoint: .top, endPoint: .bottom))
+                    .overlay(shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.5), .white.opacity(0.05)], startPoint: .top, endPoint: .bottom), lineWidth: max(0.5, side * 0.004)))
+                    .frame(width: tile, height: tile)
+                    .shadow(color: .black.opacity(0.3), radius: side * 0.02, y: side * 0.012)
+                LogoMark(weight: side < 64 ? 0.18 : 0.14)  // thicker when tiny so the G survives
+                    .foregroundStyle(.white)
+                    .frame(width: tile * 0.62, height: tile * 0.62)
+                    .shadow(color: Color(hex: 0x7A3000).opacity(0.35), radius: side * 0.012, y: side * 0.006)
+            }
+            .frame(width: g.size.width, height: g.size.height)
+        }
+    }
+}
+
 /// The coloured menu bar pill, rendered to an image (status items drop colour from template images).
 struct PillView: View {
     let state: BarState
@@ -91,7 +136,7 @@ struct PillView: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            Image(systemName: state.symbol)
+            if state.warning { Image(systemName: "exclamationmark.circle") } else { LogoMark(weight: 0.16).frame(width: 13, height: 13) }
             Text(state.text)
         }
         .font(.system(size: 13, weight: .semibold))

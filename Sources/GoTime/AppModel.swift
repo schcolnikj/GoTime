@@ -22,7 +22,7 @@ enum Pref {
 struct BarState: Equatable {
     let text: String
     let urgency: Urgency
-    var symbol = "calendar"
+    var warning = false  // shows a warning sign instead of the logo
 }
 
 @MainActor
@@ -102,7 +102,7 @@ final class AppModel: ObservableObject {
     var bar: BarState {
         switch access {
         case .unknown: return BarState(text: "GoTime", urgency: .calm)
-        case .denied: return BarState(text: "Allow calendar access", urgency: .action, symbol: "exclamationmark.circle")
+        case .denied: return BarState(text: "Allow calendar access", urgency: .action, warning: true)
         case .granted: break
         }
         if let m = goTime { return BarState(text: "Join now · " + Fmt.short(m.title), urgency: .now) }
@@ -111,7 +111,7 @@ final class AppModel: ObservableObject {
             return BarState(text: Fmt.short(m.title) + " · ends in " + Fmt.remaining(m.end.timeIntervalSince(now)), urgency: .calm)
         }
         if let m = upcoming { return countdownBar(m) }
-        return BarState(text: "Free for the day", urgency: .calm, symbol: "checkmark.circle")
+        return BarState(text: "Free for the day", urgency: .calm)
     }
 
     private func countdownBar(_ m: Meeting) -> BarState {

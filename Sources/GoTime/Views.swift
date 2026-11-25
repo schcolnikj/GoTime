@@ -155,11 +155,10 @@ struct BannerView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "calendar.badge.clock")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color.bell)
-                .frame(width: 36, height: 36)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.brand.opacity(0.18)))
+            AppIconView()
+                .frame(width: 44, height: 44)
+                .padding(-4)  // the icon art has the macOS margin built in
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(kind == .lastCall ? "GoTime · Time Sensitive" : "GoTime").fontWeight(.semibold)
