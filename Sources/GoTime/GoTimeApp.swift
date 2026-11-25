@@ -82,17 +82,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let colors: (bg: Color, fg: Color)
         switch state.urgency {
-        // Filled while meetings are still ahead today; outlined once the day is done.
+        // Filled orange while meetings are still ahead today; a white outline once the day is done.
         // White on the fill by choice; only 2.97:1 on #EF7200, fine for bold 13 pt.
-        case .calm, .action: colors = state.outlined ? (.clear, .brand) : (.brand, .white)
+        case .calm, .action: colors = state.outlined ? (.clear, .white) : (.brand, .white)
         case .soon: colors = (.soon, .onSoon)
         case .imminent: colors = (.alarm, .white)
         case .now: colors = (flashOn ? .alarm : .alarmDim, .white)
         }
-        let renderer = ImageRenderer(content: PillView(state: state, bg: colors.bg, fg: colors.fg, outline: state.outlined ? .brand : nil))
+        let renderer = ImageRenderer(content: PillView(state: state, bg: colors.bg, fg: colors.fg, outline: state.outlined ? .white : nil))
         renderer.scale = button.window?.backingScaleFactor ?? 2
         let image = renderer.nsImage
-        image?.isTemplate = false
+        // The outline is a template image: white on a dark menu bar, black on a light one, so it never disappears.
+        image?.isTemplate = state.outlined
         button.image = image
         button.imagePosition = .imageOnly
         button.title = ""
