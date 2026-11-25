@@ -22,22 +22,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     lazy var center = AlertCenter(model: model)
     private var statusItem: NSStatusItem!
-    private let popover = NSPopover()
+    private let panel = PanelController()
     private var settingsWindow: NSWindow?
     private var timer: Timer?
     private var ticks = 0
     private var lastRender = ""
-    private var shownAt = Date.distantPast
     private var hoverOpen: DispatchWorkItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Pref.registerDefaults()
         NSApp.appearance = NSAppearance(named: .darkAqua)
-
-        let host = NSHostingController(rootView: PanelView(model: model, center: center, openSettings: { [weak self] in self?.openSettings() }))
-        host.sizingOptions = [.preferredContentSize]
-        popover.contentViewController = host
-        popover.behavior = .transient
 
         // New items land in the menu bar's hidden overflow (behind «). Start at the right end, in the
         // always-visible part; once the user ⌘-drags it, macOS saves that spot under the same key.
@@ -88,7 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let colors: (bg: Color, fg: Color)
         switch state.urgency {
-        case .calm, .action: colors = (.brand, .onBrand)
+        case .calm, .action: colors = (.brand, .white)  // white by choice; only 2.97:1 on #EF7200, fine for bold 13 pt
         case .soon: colors = (.soon, .onSoon)
         case .imminent: colors = (.alarm, .white)
         case .now: colors = (flashOn ? .alarm : .alarmDim, .white)
@@ -105,10 +99,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func statusItemClicked() {
         hoverOpen?.cancel(); hoverOpen = nil
         // A hover may have just opened it; don't let the click that follows close it again.
-        if popover.isShown && Date().timeIntervalSince(shownAt) > 0.6 {
-            popover.performClose(nil)
+        if panel.isShown && Date().timeIntervalSince(panel.shownAt) > 0.6 {
+            panel.close()
         } else {
-            showPanel(activate: true)
+            showPanel(focus: true)
         }
     }
 
@@ -117,11 +111,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc(mouseEntered:) func mouseEntered(_ event: NSEvent) {}
 
     @objc(mouseMoved:) func mouseMoved(_ event: NSEvent) {
-        guard hoverOpen == nil, !popover.isShown else { return }
+        guard hoverOpen == nil, !panel.isShown else { return }
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.hoverOpen = nil
-            if self.isPointerOnItem { self.showPanel(activate: false) }
+            if self.isPointerOnItem { self.showPanel(focus: false) }
         }
         hoverOpen = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
@@ -136,16 +130,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return window.convertToScreen(button.convert(button.bounds, to: nil)).contains(NSEvent.mouseLocation)
     }
 
-    private func showPanel(activate: Bool) {
-        if activate { NSApp.activate() }  // needed for ⌘J / ⌘N / ⌘Q; hover doesn't steal focus
-        guard let button = statusItem.button, !popover.isShown else { return }
+    /// Never activates the app (that re-lays out the menu bar); `focus` makes the panel key so ⌘J / ⌘N / ⌘Q work.
+    private func showPanel(focus: Bool) {
+        guard let button = statusItem.button, let window = button.window else { return }
+        if panel.isShown { if focus { panel.focus() }; return }
         model.refreshAccess()
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        shownAt = Date()
+        let itemRect = window.convertToScreen(button.convert(button.bounds, to: nil))
+        panel.show(PanelView(model: model, center: center, openSettings: { [weak self] in self?.openSettings() }), below: itemRect, focus: focus)
     }
 
     private func openSettings() {
-        popover.performClose(nil)
+        panel.close()
         if settingsWindow == nil {
             let w = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(center: center, model: model)))
             w.title = "GoTime Settings"

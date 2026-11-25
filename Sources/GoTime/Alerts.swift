@@ -46,7 +46,7 @@ final class AlertCenter {
     }
 
     func join(_ m: Meeting) {
-        if let url = m.link { NSWorkspace.shared.open(url) }
+        if let url = m.link ?? m.calendarURL { NSWorkspace.shared.open(url) }
         acknowledge(m)
     }
 
@@ -61,7 +61,8 @@ final class AlertCenter {
 
     func testAlarm() {
         let now = Date()
-        showAlarm(Meeting(id: "test-\(now.timeIntervalSince1970)", title: "Test alarm", start: now, end: now.addingTimeInterval(1800)))
+        showAlarm(Meeting(id: "test-\(now.timeIntervalSince1970)", title: "Test alarm", start: now, end: now.addingTimeInterval(1800),
+                          link: URL(string: "https://meet.google.com/"), service: "Google Meet"))
     }
 
     private func acknowledge(_ m: Meeting) {
@@ -89,6 +90,56 @@ final class FloatingPanel: NSPanel {
         hidesOnDeactivate = false
         // Show on every Space and over full-screen apps.
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+    }
+}
+
+/// The today panel under the menu bar item. A non-activating panel rather than an NSPopover: activating
+/// the app makes macOS re-lay out the menu bar (the « overflow), which moved the item and closed the popover.
+@MainActor
+final class PanelController {
+    private var panel: FloatingPanel?
+    private var monitors: [Any] = []
+    private var appSwitch: NSObjectProtocol?
+    private(set) var shownAt = Date.distantPast
+    var isShown: Bool { panel != nil }
+
+    func show<V: View>(_ content: V, below item: NSRect, focus: Bool) {
+        close()
+        let host = NSHostingView(rootView: content.windowGlass(22).padding(14).environment(\.colorScheme, .dark))
+        let size = host.fittingSize
+        let screen = NSScreen.screens.first { $0.frame.intersects(item) } ?? NSScreen.main ?? NSScreen.screens[0]
+        let vf = screen.visibleFrame
+        let x = min(max(item.midX - size.width / 2, vf.minX), vf.maxX - size.width)
+        // shortcut: sized when opened; if today's list grows while it's open, it resizes on the next open.
+        let p = FloatingPanel(rect: NSRect(x: x, y: item.minY - size.height + 10, width: size.width, height: size.height),
+                              level: .popUpMenu, activating: false)
+        p.contentView = host
+        if focus { p.makeKeyAndOrderFront(nil) } else { p.orderFrontRegardless() }  // hover must not steal typing
+        panel = p
+        shownAt = Date()
+
+        // Close on a click in another app, on Esc, or when another app comes forward (e.g. Join opened the browser).
+        if let m = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { [weak self] _ in
+            MainActor.assumeIsolated { self?.close() }
+        }) { monitors.append(m) }
+        if let m = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
+            guard event.keyCode == 53 else { return event }
+            MainActor.assumeIsolated { self?.close() }
+            return nil
+        }) { monitors.append(m) }
+        appSwitch = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.close() }
+        }
+    }
+
+    func focus() { panel?.makeKeyAndOrderFront(nil) }
+
+    func close() {
+        monitors.forEach { NSEvent.removeMonitor($0) }
+        monitors = []
+        if let o = appSwitch { NSWorkspace.shared.notificationCenter.removeObserver(o); appSwitch = nil }
+        panel?.close()
+        panel = nil
     }
 }
 

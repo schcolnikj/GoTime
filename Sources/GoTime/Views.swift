@@ -175,9 +175,7 @@ struct BannerView: View {
                     .font(.system(size: 13)).foregroundStyle(.secondary)
                 if kind != .heads {
                     HStack(spacing: 8) {
-                        if meeting.link != nil {
-                            Button("Join") { center.join(meeting) }.buttonStyle(PrimaryButtonStyle(height: 30))
-                        }
+                        Button("Join") { center.join(meeting) }.buttonStyle(PrimaryButtonStyle(height: 30))
                         if kind == .lastCall {
                             Button("Snooze 1 min") { center.snooze(meeting, minutes: 1) }
                                 .buttonStyle(GlassButtonStyle(height: 30, expand: true))
@@ -231,8 +229,7 @@ struct AlarmView: View {
                     .font(.system(size: 18)).foregroundStyle(.secondary).padding(.top, 12)
 
                 Button { center.join(meeting) } label: {
-                    if meeting.link == nil { Label("Got it", systemImage: "checkmark") }
-                    else { Label("Join \(meeting.service ?? "meeting")", systemImage: "video.fill") }
+                    Label("Join \(meeting.service ?? "meeting")", systemImage: "video.fill")
                 }
                 .buttonStyle(PrimaryButtonStyle(height: 64))
                 .keyboardShortcut(.defaultAction)

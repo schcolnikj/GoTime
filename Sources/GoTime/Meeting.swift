@@ -10,10 +10,14 @@ struct Meeting: Identifiable, Equatable {
     let service: String?
     let attendees: Int
     let color: NSColor
+    /// Opens the event in Calendar; Join falls back to it when no video link was found.
+    let calendarURL: URL?
 
-    init(id: String, title: String, start: Date, end: Date, link: URL? = nil, service: String? = nil, attendees: Int = 0, color: NSColor = .systemBlue) {
+    init(id: String, title: String, start: Date, end: Date, link: URL? = nil, service: String? = nil, attendees: Int = 0,
+         color: NSColor = .systemBlue, calendarURL: URL? = nil) {
         self.id = id; self.title = title; self.start = start; self.end = end
         self.link = link; self.service = service; self.attendees = attendees; self.color = color
+        self.calendarURL = calendarURL
     }
 
     init(event: EKEvent) {
@@ -27,7 +31,10 @@ struct Meeting: Identifiable, Equatable {
             link: found?.url,
             service: found?.service,
             attendees: event.attendees?.count ?? 0,
-            color: event.calendar?.color ?? .systemBlue
+            color: event.calendar?.color ?? .systemBlue,
+            calendarURL: event.eventIdentifier
+                .flatMap { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) }
+                .flatMap { URL(string: "ical://ekevent/\($0)?method=show&options=more") }
         )
     }
 
