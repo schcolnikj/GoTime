@@ -15,8 +15,9 @@
 
 ## What it does
 
-- **Countdown in the menu bar.** Your next meeting and the time left, in an orange pill. It turns yellow 10 minutes before, red with seconds 2 minutes before, and flashes "Join now" at start.
-- **Today at a glance.** Hover or click the pill for today's meetings, a Join button (⌘J), an alert bell per meeting, New meeting (⌘N), Settings and Quit (⌘Q).
+- **Countdown in the menu bar.** Your next meeting and the time left, in an orange pill. It turns yellow 10 minutes before, red with seconds 2 minutes before, and flashes "Join now" at start. Once nothing else starts today, it becomes a white outline.
+- **Your day at a glance.** Hover or click the pill for today's meetings, a Join button (⌘J), an alert bell per meeting, New meeting (⌘N), Settings and Quit (⌘Q). Use ‹ › (or ← →) to look at other days.
+- **Accepted or just invited.** A filled dot means you accepted; a hollow ring marked Invited or Maybe means you haven't yet.
 - **Alerts that get louder:**
 
   | When | What you get |
@@ -28,6 +29,7 @@
 
   The alerts are GoTime's own windows, so Focus and Do Not Disturb don't hide them.
 - **One-click Join** for Google Meet, Zoom, Microsoft Teams and Webex links in the event.
+- **Settings** to pick which reminders fire, the alarm sound, which calendars to show (iCloud, Google, subscriptions…) and whether to open at login. Hidden calendars never alert. Test alarm shows the full-screen alarm right away.
 
 ## Build and run
 
