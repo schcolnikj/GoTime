@@ -101,6 +101,7 @@ final class PanelController {
     private var monitors: [Any] = []
     private var appSwitch: NSObjectProtocol?
     private var top: CGFloat = 0
+    private var itemRect = NSRect.zero
     private(set) var shownAt = Date.distantPast
     var isShown: Bool { panel != nil }
 
@@ -117,11 +118,16 @@ final class PanelController {
         if focus { p.makeKeyAndOrderFront(nil) } else { p.orderFrontRegardless() }  // hover must not steal typing
         panel = p
         top = p.frame.maxY
+        itemRect = item
         shownAt = Date()
 
         // Close on a click in another app, on Esc, or when another app comes forward (e.g. Join opened the browser).
         if let m = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { [weak self] _ in
-            MainActor.assumeIsolated { self?.close() }
+            MainActor.assumeIsolated {
+                // A click on the menu bar item is left to the item's own action, which toggles the panel.
+                guard let self, !self.itemRect.contains(NSEvent.mouseLocation) else { return }
+                self.close()
+            }
         }) { monitors.append(m) }
         if let m = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
             guard event.keyCode == 53 else { return event }

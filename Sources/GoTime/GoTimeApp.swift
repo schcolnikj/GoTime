@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var ticks = 0
     private var lastRender = ""
     private var hoverOpen: DispatchWorkItem?
+    private var hoverBlocked = false  // set by a click-close; cleared when the pointer leaves the item
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Pref.registerDefaults()
@@ -104,6 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // A hover may have just opened it; don't let the click that follows close it again.
         if panel.isShown && Date().timeIntervalSince(panel.shownAt) > 0.6 {
             panel.close()
+            hoverBlocked = true  // the pointer is still on the item: don't let hover reopen it straight away
         } else {
             showPanel(focus: true)
         }
@@ -114,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc(mouseEntered:) func mouseEntered(_ event: NSEvent) {}
 
     @objc(mouseMoved:) func mouseMoved(_ event: NSEvent) {
-        guard hoverOpen == nil, !panel.isShown else { return }
+        guard hoverOpen == nil, !panel.isShown, !hoverBlocked else { return }
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.hoverOpen = nil
@@ -126,6 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc(mouseExited:) func mouseExited(_ event: NSEvent) {
         hoverOpen?.cancel(); hoverOpen = nil
+        hoverBlocked = false
     }
 
     private var isPointerOnItem: Bool {
