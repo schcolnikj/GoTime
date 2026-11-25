@@ -330,7 +330,7 @@ struct AlarmView: View {
 
 struct SettingsView: View {
     let center: AlertCenter
-    let model: AppModel
+    @ObservedObject var model: AppModel
     @AppStorage("remind10") private var r10 = true
     @AppStorage("remind5") private var r5 = true
     @AppStorage("remind1") private var r1 = true
@@ -364,6 +364,27 @@ struct SettingsView: View {
                 Toggle("Only meetings with a video link", isOn: $onlyVideo)
                     .onChange(of: onlyVideo) { model.reload() }
             }
+            if model.calendarGroups.isEmpty {
+                Section("Calendars") {
+                    Text(model.access == .granted ? "No calendars found" : "Allow calendar access to choose calendars")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            ForEach(model.calendarGroups) { group in
+                Section("Calendars · \(group.id)") {
+                    ForEach(group.calendars, id: \.calendarIdentifier) { calendar in
+                        Toggle(isOn: Binding(
+                            get: { !model.hiddenCalendars.contains(calendar.calendarIdentifier) },
+                            set: { model.setCalendar(calendar.calendarIdentifier, shown: $0) }
+                        )) {
+                            HStack(spacing: 8) {
+                                Circle().fill(Color(nsColor: calendar.color)).frame(width: 10, height: 10)
+                                Text(calendar.title)
+                            }
+                        }
+                    }
+                }
+            }
             Section {
                 Toggle("Open at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) {
@@ -374,7 +395,7 @@ struct SettingsView: View {
                         }
                     }
                 HStack {
-                    Text("Turn alerts off for a single meeting with its bell in the panel.")
+                    Text("Hidden calendars don't show and never alert. To silence one meeting, use its bell in the panel.")
                         .font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Button { center.testAlarm() } label: { Label("Test alarm", systemImage: "bell.fill") }
@@ -384,6 +405,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 580)  // a grouped Form scrolls, so it has no natural height: the window collapsed without this
+        .frame(width: 480, height: 640)  // a grouped Form scrolls, so it has no natural height: the window collapsed without this
     }
 }

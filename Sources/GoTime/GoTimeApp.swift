@@ -75,19 +75,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem.button else { return }
         let state = model.bar
         let flashOn = Int(model.now.timeIntervalSince1970) % 2 == 0 || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        let key = "\(state.text)|\(state.urgency)|\(state.warning)|\(flashOn)"
+        let key = "\(state.text)|\(state.urgency)|\(state.warning)|\(state.outlined)|\(flashOn)"
         guard key != lastRender else { return }
         lastRender = key
         button.setAccessibilityLabel(state.text)
 
         let colors: (bg: Color, fg: Color)
         switch state.urgency {
-        case .calm, .action: colors = (.brand, .white)  // white by choice; only 2.97:1 on #EF7200, fine for bold 13 pt
+        // Filled while meetings are still ahead today; outlined once the day is done.
+        // White on the fill by choice; only 2.97:1 on #EF7200, fine for bold 13 pt.
+        case .calm, .action: colors = state.outlined ? (.clear, .brand) : (.brand, .white)
         case .soon: colors = (.soon, .onSoon)
         case .imminent: colors = (.alarm, .white)
         case .now: colors = (flashOn ? .alarm : .alarmDim, .white)
         }
-        let renderer = ImageRenderer(content: PillView(state: state, bg: colors.bg, fg: colors.fg))
+        let renderer = ImageRenderer(content: PillView(state: state, bg: colors.bg, fg: colors.fg, outline: state.outlined ? .brand : nil))
         renderer.scale = button.window?.backingScaleFactor ?? 2
         let image = renderer.nsImage
         image?.isTemplate = false
@@ -178,7 +180,7 @@ func exportIconset(to dir: String) {
 
 /// `GoTime --selftest`: checks the alert ladder, link detection and formatting. Runs in build.sh.
 enum SelfTest {
-    static func run() {
+    @MainActor static func run() {
         var failures = 0
         func check(_ ok: Bool, _ what: String) {
             if !ok { failures += 1; print("FAIL: \(what)") }
@@ -220,6 +222,20 @@ enum SelfTest {
               && Meeting.Response(.declined) == .declined, "invite response mapping")
         check(Meeting(id: "x", title: "t", start: midnight, end: midnight.addingTimeInterval(1800), response: .pending).rowSub
               == "Invited · 30 min · No video link", "invited label in the row")
+
+        // Pill outline: filled while something still starts today, outlined once the day is done.
+        let model = AppModel()
+        model.access = .granted
+        let noon = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: Date())!
+        model.now = noon
+        model.meetings = [Meeting(id: "a@1", title: "Standup", start: noon.addingTimeInterval(-3600), end: noon.addingTimeInterval(-1800))]
+        check(model.bar.outlined && model.bar.text == "Free for the day", "day done: outlined")
+        model.meetings.append(Meeting(id: "b@2", title: "Review", start: noon.addingTimeInterval(7200), end: noon.addingTimeInterval(9000)))
+        check(!model.bar.outlined, "a meeting later today: filled")
+        model.meetings = [Meeting(id: "c@3", title: "Last one", start: noon.addingTimeInterval(-900), end: noon.addingTimeInterval(1200))]
+        check(model.bar.outlined && model.bar.text.hasPrefix("Last one · ends in"), "last meeting running, nothing after: outlined")
+        model.meetings.append(Meeting(id: "d@4", title: "Later", start: noon.addingTimeInterval(3 * 3600), end: noon.addingTimeInterval(4 * 3600)))
+        check(!model.bar.outlined, "meeting running with more after: filled")
 
         print(failures == 0 ? "selftest: all passed" : "selftest: \(failures) failed")
         if failures > 0 { exit(1) }

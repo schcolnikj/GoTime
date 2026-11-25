@@ -149,6 +149,7 @@ struct PillView: View {
     let state: BarState
     let bg: Color
     let fg: Color
+    var outline: Color? = nil
 
     var body: some View {
         HStack(spacing: 5) {
@@ -160,6 +161,6 @@ struct PillView: View {
         .padding(.horizontal, 9)
         .frame(height: 20)
         .background(Capsule().fill(bg))
-        .overlay(Capsule().strokeBorder(.white.opacity(0.3), lineWidth: 1))
+        .overlay(Capsule().strokeBorder(outline ?? Color.white.opacity(0.3), lineWidth: outline == nil ? 1 : 1.5))
     }
 }

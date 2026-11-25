@@ -23,6 +23,7 @@ struct BarState: Equatable {
     let text: String
     let urgency: Urgency
     var warning = false  // shows a warning sign instead of the logo
+    var outlined = false  // nothing else starts today: outline instead of fill
 }
 
 @MainActor
@@ -33,6 +34,21 @@ final class AppModel: ObservableObject {
     @Published var meetings: [Meeting] = []
     @Published var now = Date()
     @Published var muted: Set<String> = Pref.muted
+    /// Calendars switched off in Settings: their meetings don't show and never alert.
+    @Published private(set) var hiddenCalendars = Set(Pref.d.stringArray(forKey: "hiddenCalendars") ?? [])
+    @Published private(set) var calendarGroups: [CalendarGroup] = []
+
+    /// The calendars of one account (iCloud, a Google account, Subscribed…), for Settings.
+    struct CalendarGroup: Identifiable {
+        let id: String  // the account's name
+        let calendars: [EKCalendar]
+    }
+
+    func setCalendar(_ id: String, shown: Bool) {
+        if shown { hiddenCalendars.remove(id) } else { hiddenCalendars.insert(id) }
+        Pref.d.set(Array(hiddenCalendars), forKey: "hiddenCalendars")
+        reload()
+    }
     /// Meetings joined or dismissed: no more alerts for them.
     @Published var acknowledged: Set<String> = []
 
@@ -51,7 +67,11 @@ final class AppModel: ObservableObject {
     }
 
     func reload() {
-        guard access == .granted else { meetings = []; viewedDayMeetings = []; return }
+        guard access == .granted else { meetings = []; viewedDayMeetings = []; calendarGroups = []; return }
+        calendarGroups = Dictionary(grouping: store.calendars(for: .event), by: { $0.source?.title ?? "Other" })
+            .map { CalendarGroup(id: $0.key, calendars: $0.value.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }) }
+            .sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
+
         let cal = Calendar.current
         let dayStart = cal.startOfDay(for: now)
         let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart)!
@@ -66,7 +86,9 @@ final class AppModel: ObservableObject {
     private func fetch(from start: Date, to end: Date) -> [Meeting] {
         let skipDeclined = Pref.d.bool(forKey: "skipDeclined")
         let onlyVideo = Pref.d.bool(forKey: "onlyVideo")
-        return store.events(matching: store.predicateForEvents(withStart: start, end: end, calendars: nil))
+        let shown = store.calendars(for: .event).filter { !hiddenCalendars.contains($0.calendarIdentifier) }
+        guard !shown.isEmpty else { return [] }  // every calendar hidden (an empty list would mean "all")
+        return store.events(matching: store.predicateForEvents(withStart: start, end: end, calendars: shown))
             .filter { !$0.isAllDay && $0.status != .canceled }
             .filter { !(skipDeclined && $0.attendees?.first(where: \.isCurrentUser)?.participantStatus == .declined) }
             .map(Meeting.init(event:))
@@ -142,10 +164,11 @@ final class AppModel: ObservableObject {
         if let m = goTime { return BarState(text: "Join now · " + Fmt.short(m.title), urgency: .now) }
         if let m = upcoming, m.start.timeIntervalSince(now) <= 600 { return countdownBar(m) }
         if let m = current {
-            return BarState(text: Fmt.short(m.title) + " · ends in " + Fmt.remaining(m.end.timeIntervalSince(now)), urgency: .calm)
+            return BarState(text: Fmt.short(m.title) + " · ends in " + Fmt.remaining(m.end.timeIntervalSince(now)), urgency: .calm,
+                            outlined: upcoming == nil)
         }
         if let m = upcoming { return countdownBar(m) }
-        return BarState(text: "Free for the day", urgency: .calm)
+        return BarState(text: "Free for the day", urgency: .calm, outlined: true)
     }
 
     private func countdownBar(_ m: Meeting) -> BarState {
