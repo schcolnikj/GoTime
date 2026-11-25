@@ -102,10 +102,9 @@ final class PanelController {
     private var appSwitch: NSObjectProtocol?
     private var top: CGFloat = 0
     private var itemRect = NSRect.zero
-    private(set) var shownAt = Date.distantPast
     var isShown: Bool { panel != nil }
 
-    func show<V: View>(_ content: V, below item: NSRect, focus: Bool) {
+    func show<V: View>(_ content: V, below item: NSRect) {
         close()
         let host = NSHostingView(rootView: content.windowGlass(22).padding(14).environment(\.colorScheme, .dark))
         let size = host.fittingSize
@@ -115,11 +114,10 @@ final class PanelController {
         let p = FloatingPanel(rect: NSRect(x: x, y: item.minY - size.height + 10, width: size.width, height: size.height),
                               level: .popUpMenu, activating: false)
         p.contentView = host
-        if focus { p.makeKeyAndOrderFront(nil) } else { p.orderFrontRegardless() }  // hover must not steal typing
+        p.makeKeyAndOrderFront(nil)
         panel = p
         top = p.frame.maxY
         itemRect = item
-        shownAt = Date()
 
         // Close on a click in another app, on Esc, or when another app comes forward (e.g. Join opened the browser).
         if let m = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { [weak self] _ in
@@ -138,8 +136,6 @@ final class PanelController {
             MainActor.assumeIsolated { self?.close() }
         }
     }
-
-    func focus() { panel?.makeKeyAndOrderFront(nil) }
 
     /// Grow or shrink to the content (e.g. after switching days), keeping the top edge under the menu bar.
     /// AppKit may already have resized the window from its bottom edge, so re-anchor to the saved top.

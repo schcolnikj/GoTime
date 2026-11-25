@@ -16,7 +16,7 @@
 ## What it does
 
 - **Countdown in the menu bar.** Your next meeting and the time left, in an orange pill. It turns yellow 10 minutes before, red with seconds 2 minutes before, and flashes "Join now" at start. Once nothing else starts today, it becomes a white outline.
-- **Your day at a glance.** Hover or click the pill for today's meetings, a Join button (⌘J), an alert bell per meeting, New meeting (⌘N), Settings and Quit (⌘Q). Use ‹ › (or ← →) to look at other days.
+- **Your day at a glance.** Click the pill for today's meetings, a Join button (⌘J), an alert bell per meeting, New meeting (⌘N), Settings and Quit (⌘Q). Use ‹ › (or ← →) to look at other days.
 - **Accepted or just invited.** A filled dot means you accepted; a hollow ring marked Invited or Maybe means you haven't yet.
 - **Alerts that get louder:**
 

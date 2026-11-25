@@ -27,8 +27,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var timer: Timer?
     private var ticks = 0
     private var lastRender = ""
-    private var hoverOpen: DispatchWorkItem?
-    private var hoverBlocked = false  // set by a click-close; cleared when the pointer leaves the item
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Pref.registerDefaults()
@@ -44,7 +42,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let button = statusItem.button {
             button.target = self
             button.action = #selector(statusItemClicked)
-            button.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect], owner: self, userInfo: nil))
         }
 
         NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: model.store, queue: .main) { [weak self] _ in
@@ -101,52 +98,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func statusItemClicked() {
-        hoverOpen?.cancel(); hoverOpen = nil
-        // A hover may have just opened it; don't let the click that follows close it again.
-        if panel.isShown && Date().timeIntervalSince(panel.shownAt) > 0.6 {
-            panel.close()
-            hoverBlocked = true  // the pointer is still on the item: don't let hover reopen it straight away
-        } else {
-            showPanel(focus: true)
-        }
+        if panel.isShown { panel.close() } else { showPanel() }
     }
 
-    // Hover opens the panel only after a real mouse move over the item plus a short rest. A bare
-    // mouseEntered also fires when the menu bar overflow (« ») slides items under a still pointer.
-    @objc(mouseEntered:) func mouseEntered(_ event: NSEvent) {}
-
-    @objc(mouseMoved:) func mouseMoved(_ event: NSEvent) {
-        guard hoverOpen == nil, !panel.isShown, !hoverBlocked else { return }
-        let work = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            self.hoverOpen = nil
-            if self.isPointerOnItem { self.showPanel(focus: false) }
-        }
-        hoverOpen = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
-    }
-
-    @objc(mouseExited:) func mouseExited(_ event: NSEvent) {
-        hoverOpen?.cancel(); hoverOpen = nil
-        hoverBlocked = false
-    }
-
-    private var isPointerOnItem: Bool {
-        guard let button = statusItem.button, let window = button.window else { return false }
-        return window.convertToScreen(button.convert(button.bounds, to: nil)).contains(NSEvent.mouseLocation)
-    }
-
-    /// Never activates the app (that re-lays out the menu bar); `focus` makes the panel key so ⌘J / ⌘N / ⌘Q work.
-    private func showPanel(focus: Bool) {
+    /// Never activates the app (that re-lays out the menu bar); the panel is made key so ⌘J / ⌘N / ⌘Q work.
+    private func showPanel() {
         guard let button = statusItem.button, let window = button.window else { return }
-        if panel.isShown { if focus { panel.focus() }; return }
         model.refreshAccess()
         model.dayOffset = 0  // always open on today
         let itemRect = window.convertToScreen(button.convert(button.bounds, to: nil))
         let content = PanelView(model: model, center: center,
                                 openSettings: { [weak self] in self?.openSettings() },
                                 onResize: { [weak self] in self?.panel.fitToContent() })
-        panel.show(content, below: itemRect, focus: focus)
+        panel.show(content, below: itemRect)
     }
 
     private func openSettings() {
