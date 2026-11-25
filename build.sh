@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds build/GoTime.app (ad-hoc signed) and runs the self-test.
-# Uses the Command Line Tools so it works without accepting the Xcode license.
+# Builds with the Command Line Tools by default; set DEVELOPER_DIR to use Xcode instead.
 set -euo pipefail
 cd "$(dirname "$0")"
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Library/Developer/CommandLineTools}"
